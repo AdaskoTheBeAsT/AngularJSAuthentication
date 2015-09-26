@@ -102,10 +102,10 @@ namespace AngularJSAuthentication.API.Providers
 
             var props = new AuthenticationProperties(new Dictionary<string, string>
                 {
-                    { 
-                        "as:client_id", (context.ClientId == null) ? string.Empty : context.ClientId
+                    {
+                        "as:client_id", context.ClientId ??string.Empty
                     },
-                    { 
+                    {
                         "userName", context.UserName
                     }
                 });
@@ -128,7 +128,7 @@ namespace AngularJSAuthentication.API.Providers
 
             // Change auth ticket for refresh token requests
             var newIdentity = new ClaimsIdentity(context.Ticket.Identity);
-            
+
             var newClaim = newIdentity.Claims.Where(c => c.Type == "newClaim").FirstOrDefault();
             if (newClaim != null)
             {
