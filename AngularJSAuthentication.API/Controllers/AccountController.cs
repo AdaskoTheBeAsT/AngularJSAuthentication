@@ -7,13 +7,10 @@ using Microsoft.Owin.Security;
 using Microsoft.Owin.Security.OAuth;
 using Newtonsoft.Json.Linq;
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Net;
 using System.Net.Http;
 using System.Security.Claims;
 using System.Threading.Tasks;
-using System.Web;
 using System.Web.Http;
 
 namespace AngularJSAuthentication.API.Controllers
@@ -32,29 +29,6 @@ namespace AngularJSAuthentication.API.Controllers
         {
             _repo = new AuthRepository();
         }
-
-        // POST api/Account/Register
-        [AllowAnonymous]
-        [Route("Register")]
-        public async Task<IHttpActionResult> Register(UserModel userModel)
-        {
-             if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-
-             IdentityResult result = await _repo.RegisterUser(userModel);
-
-             IHttpActionResult errorResult = GetErrorResult(result);
-
-             if (errorResult != null)
-             {
-                 return errorResult;
-             }
-
-             return Ok();
-        }
-
         // GET api/Account/ExternalLogin
         [OverrideAuthentication]
         [HostAuthentication(DefaultAuthenticationTypes.ExternalCookie)]
@@ -107,6 +81,28 @@ namespace AngularJSAuthentication.API.Controllers
 
             return Redirect(redirectUri);
 
+        }
+
+        // POST api/Account/Register
+        [AllowAnonymous]
+        [Route("Register")]
+        public async Task<IHttpActionResult> Register(UserModel userModel)
+        {
+             if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+             IdentityResult result = await _repo.RegisterUser(userModel);
+
+             IHttpActionResult errorResult = GetErrorResult(result);
+
+             if (errorResult != null)
+             {
+                 return errorResult;
+             }
+
+             return Ok();
         }
 
         // POST api/Account/RegisterExternal
@@ -204,8 +200,6 @@ namespace AngularJSAuthentication.API.Controllers
             base.Dispose(disposing);
         }
 
-        #region Helpers
-
         private IHttpActionResult GetErrorResult(IdentityResult result)
         {
             if (result == null)
@@ -233,6 +227,50 @@ namespace AngularJSAuthentication.API.Controllers
             }
 
             return null;
+        }
+        private JObject GenerateLocalAccessTokenResponse(string userName)
+        {
+
+            var tokenExpiration = TimeSpan.FromDays(1);
+
+            ClaimsIdentity identity = new ClaimsIdentity(OAuthDefaults.AuthenticationType);
+
+            identity.AddClaim(new Claim(ClaimTypes.Name, userName));
+            identity.AddClaim(new Claim("role", "user"));
+
+            var props = new AuthenticationProperties()
+            {
+                IssuedUtc = DateTime.UtcNow,
+                ExpiresUtc = DateTime.UtcNow.Add(tokenExpiration),
+            };
+
+            var ticket = new AuthenticationTicket(identity, props);
+
+            var accessToken = Startup.OAuthBearerOptions.AccessTokenFormat.Protect(ticket);
+
+            JObject tokenResponse = new JObject(
+                                        new JProperty("userName", userName),
+                                        new JProperty("access_token", accessToken),
+                                        new JProperty("token_type", "bearer"),
+                                        new JProperty("expires_in", tokenExpiration.TotalSeconds.ToString()),
+                                        new JProperty(".issued", ticket.Properties.IssuedUtc.ToString()),
+                                        new JProperty(".expires", ticket.Properties.ExpiresUtc.ToString())
+        );
+
+            return tokenResponse;
+        }
+
+        private string GetQueryString(HttpRequestMessage request, string key)
+        {
+            var queryStrings = request.GetQueryNameValuePairs();
+
+            if (queryStrings == null) return null;
+
+            var match = queryStrings.FirstOrDefault(keyValue => string.Compare(keyValue.Key, key, true) == 0);
+
+            if (string.IsNullOrEmpty(match.Value)) return null;
+
+            return match.Value;
         }
 
         private string ValidateClientAndRedirectUri(HttpRequestMessage request, ref string redirectUriOutput)
@@ -277,19 +315,6 @@ namespace AngularJSAuthentication.API.Controllers
 
             return string.Empty;
 
-        }
-
-        private string GetQueryString(HttpRequestMessage request, string key)
-        {
-            var queryStrings = request.GetQueryNameValuePairs();
-
-            if (queryStrings == null) return null;
-
-            var match = queryStrings.FirstOrDefault(keyValue => string.Compare(keyValue.Key, key, true) == 0);
-
-            if (string.IsNullOrEmpty(match.Value)) return null;
-
-            return match.Value;
         }
 
         private async Task<ParsedExternalAccessToken> VerifyExternalAccessToken(string provider, string accessToken)
@@ -352,39 +377,7 @@ namespace AngularJSAuthentication.API.Controllers
 
             return parsedToken;
         }
-
-        private JObject GenerateLocalAccessTokenResponse(string userName)
-        {
-
-            var tokenExpiration = TimeSpan.FromDays(1);
-
-            ClaimsIdentity identity = new ClaimsIdentity(OAuthDefaults.AuthenticationType);
-
-            identity.AddClaim(new Claim(ClaimTypes.Name, userName));
-            identity.AddClaim(new Claim("role", "user"));
-
-            var props = new AuthenticationProperties()
-            {
-                IssuedUtc = DateTime.UtcNow,
-                ExpiresUtc = DateTime.UtcNow.Add(tokenExpiration),
-            };
-
-            var ticket = new AuthenticationTicket(identity, props);
-
-            var accessToken = Startup.OAuthBearerOptions.AccessTokenFormat.Protect(ticket);
-
-            JObject tokenResponse = new JObject(
-                                        new JProperty("userName", userName),
-                                        new JProperty("access_token", accessToken),
-                                        new JProperty("token_type", "bearer"),
-                                        new JProperty("expires_in", tokenExpiration.TotalSeconds.ToString()),
-                                        new JProperty(".issued", ticket.Properties.IssuedUtc.ToString()),
-                                        new JProperty(".expires", ticket.Properties.ExpiresUtc.ToString())
-        );
-
-            return tokenResponse;
-        }
-
+        #region Helpers
         private class ExternalLoginData
         {
             public string LoginProvider { get; set; }
